@@ -214,11 +214,6 @@
         if (lp2 && lp2.length >= 9 && phones.indexOf(lp2) === -1) phones.push(lp2);
         spans.push([m.index, m.index + m[0].length]);
       }
-      // سطر «تليفون [اخر] <رقم>» ملقيناش فيه رقم بالشكل العادي (رقم ناقص/غلط): ناخده كرقم عشان يتراجع
-      if (!spans.length) {
-        var ml = R_LBL_NUM.exec(n);
-        if (ml) { var lp3 = normLand(ml[1]) || ml[1].replace(/\D/g, ''); if (lp3 && phones.indexOf(lp3) === -1) phones.push(lp3); ln.dead = true; ln.hadPhone = true; return; }
-      }
       // أرقام دولية تانية (+249...)
       var re = /\+\d{2,3}(?:[ \-.]*\d){7,11}/g;
       while ((m = re.exec(n))) { spans.push([m.index, m.index + m[0].length]); }
@@ -230,13 +225,11 @@
   }
 
   var LABEL_WORDS = 'التواصل|التليفون|تليفون|الهاتف|هاتف|موبيل|الموبيل|موبايل|الموبايل|المحمول|الفون|فون|واتس\\s*اب|واتساب|واتس|للتواصل|التلفون|تلفون|ت|tel|phone|mobile|whatsapp';
-  var PH_LABEL = new RegExp('^\\s*(?:(?:رقمين|رقم|ارقام)(?![\\u0621-\\u064a])\\s*)?(?:(?:' + LABEL_WORDS + ')(?![\\u0621-\\u064a])\\s*)?(?:(?:مكتوب|مكتوبه)\\s*(?:بالانجليزي|بالانجليزى|انجليزي)\\s*)?(?:(?:ده|دي)\\s*(?:واتساب|واتس اب|واتس)\\s*(?:فقط)?\\s*)?[:.\\/\\-–)(،,\\s]*');
+  var PH_QUAL = '(?:اخر|اخري|اخرى|تاني|تانى|تانيه|ثاني|ثانى|التاني|الثاني|اضافي|اضافى|الاضافي|بديل|احتياطي|احتياطى|رئيسي|اساسي|الاساسي|الاول|اول|\\d)';
+  var PH_LABEL = new RegExp('^\\s*(?:(?:رقمين|رقم|ارقام)(?![\\u0621-\\u064a])\\s*)?(?:(?:' + PH_QUAL + ')(?![\\u0621-\\u064a\\d])\\s*)?(?:(?:' + LABEL_WORDS + ')(?![\\u0621-\\u064a])\\s*)?(?:(?:' + PH_QUAL + ')(?![\\u0621-\\u064a\\d])\\s*)?(?:(?:مكتوب|مكتوبه)\\s*(?:بالانجليزي|بالانجليزى|انجليزي)\\s*)?(?:(?:ده|دي)\\s*(?:واتساب|واتس اب|واتس)\\s*(?:فقط)?\\s*)?[:.\\/\\-–)(،,\\s]*');
 
-  // كلمات بتيجي بعد «تليفون»: «تليفون اخر» / «رقم تاني» / «موبايل بديل» ... دي تسمية للرقم مش جزء من العنوان
-  var PH_QUAL_W = '(?:الاخر|اخر|الاخري|اخري|التاني|تاني|الثان|ثان|التان|تان|التانيه|تانيه|الثاني|ثاني|الثانيه|ثانيه|الاضافي|اضافي|الاضافيه|اضافيه|البديل|بديل|الاحتياطي|احتياطي|الاول|اول|التالت|تالت|الثالث|ثالث|\\d(?!\\d))';
-  var PH_QUAL = new RegExp('^(?:' + PH_QUAL_W + '(?![\\u0621-\\u064a])[\\s:.\\/\\-–)(،,]*)+');
-  // سطر كله «تليفون [اخر] 0123...» (حتى لو الرقم نفسه غلط/ناقص) — بيتاخد كرقم ويتراجع في الفحص بدل ما يدخل في العنوان
-  var R_LBL_NUM = new RegExp('^\\s*(?:(?:رقمين|رقم|ارقام)(?![\\u0621-\\u064a])\\s*)?(?:' + LABEL_WORDS + ')(?![\\u0621-\\u064a])\\s*(?:' + PH_QUAL_W + '(?![\\u0621-\\u064a])[\\s:.\\/\\-–)(،,]*)*((?:\\+|00)?(?:[ \\-.]*\\d){7,13})\\s*$');
+  // كلمة التليفون (+ اخر/تاني..) اللي فضلت في آخر السطر بعد شيل الرقم: "عماره 256 تليفون اخر 010..."
+  var PH_TRAIL = new RegExp('\\s(?:(?:' + PH_QUAL + ')(?![\\u0621-\\u064a\\d])\\s*)?(?:' + LABEL_WORDS + '|رقمين|رقم|ارقام)(?![\\u0621-\\u064a])\\s*(?:(?:' + PH_QUAL + ')(?![\\u0621-\\u064a\\d])\\s*)?[:.\\/\\-–)(،,\\s]*$');
 
   /* ---------- 5) الأسعار ---------- */
   var NUMRE = /\d+(?:[.,]\d+)?/g;
@@ -359,15 +352,8 @@
     // الأسعار والأرقام
     var phones = extractPhones(L);
     var pr = extractPrices(L);
-    L.forEach(function (ln) {
-      if (ln.dead) return;
-      var n = nz(ln.raw), m = PH_LABEL.exec(n);
-      if (m && m[0].trim()) {
-        var len = m[0].length;
-        if (/[a-z\u0621-\u064a]/.test(m[0])) { var q = PH_QUAL.exec(n.slice(len)); if (q) len += q[0].length; }   // «تليفون اخر» → نشيل «اخر» كمان
-        if (!n.slice(len).trim()) ln.dead = true; else if (ln.hadPhone) ln.raw = ln.raw.slice(len);
-      }
-    });
+    L.forEach(function (ln) { if (ln.dead) return; var n = nz(ln.raw), m = PH_LABEL.exec(n); if (m && m[0].trim()) { if (!n.slice(m[0].length).trim()) ln.dead = true; else if (ln.hadPhone) ln.raw = ln.raw.slice(m[0].length); }
+      if (!ln.dead && ln.hadPhone) { var tr = PH_TRAIL.exec(nz(ln.raw)); if (tr && tr.index > 0 && tr[0].trim()) ln.raw = ln.raw.slice(0, tr.index).replace(/\s+$/, ''); } });
 
     // أول سطر حي بعد إزالة اللي اتشال
     var live = function () { return L.filter(function (l) { return !l.dead && l.raw.trim(); }); };
@@ -515,6 +501,9 @@
   }
 
   // بيراجع الأوردر (بيتنادى تاني بعد تعديل المستخدم)
+  // المحافظات اللي لازم فيها منطقة (باقي المحافظات مش لازم). عدّل القايمة دي لو احتجت.
+  var AREA_REQUIRED = { 'القاهره': 1, 'الجيزه': 1, 'الاسكندريه': 1 };
+
   function validate(o, opts) {
     opts = opts || {};
     var keepIssues = (o._parseIssues || o.issues || []).filter(function (x) { return /(المحافظة|محافظة|المنطقة|مفيش اسم شيت|اسم أكتر من شيت|مقدرتش أعرف)/.test(x); });
@@ -527,7 +516,7 @@
     if (!phones.length) out.push('رقم الموبايل مش موجود');
     phones.forEach(function (p) { if (!/^01[0125]\d{8}$/.test(p) && !/^0[2-9]\d{7,9}$/.test(p)) out.push('رقم غلط: ' + p); });   // موبايل أو أرضي (كود المحافظة + الرقم)
     if (!(o.address || '').trim()) out.push('العنوان مش موجود');
-    else if (!(o.area || '').trim()) out.push('المنطقة / المركز مش موجودة');
+    else if (!(o.area || '').trim() && AREA_REQUIRED[nz(gov).trim()]) out.push('المنطقة / المركز مش موجودة');   // مطلوبة بس في المحافظات الكبيرة؛ باقي المحافظات ممكن من غيرها (أو بنفس اسم المحافظة)
     if (!(o.details || '').trim()) out.push('تفاصيل الأوردر مش موجودة');
     if (!gov) out.push('المحافظة مش معروفة');
     if (!o.brand) out.push('الشيت مش متحدد');

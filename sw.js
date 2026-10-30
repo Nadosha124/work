@@ -1,10 +1,10 @@
 /* Service Worker — كاش كامل عشان يشتغل أوفلاين + استقبال ملف الشات من "مشاركة" */
-const VERSION = 'v14';
+const VERSION = 'v15';
 const CACHE = 'invoices-' + VERSION;
 const ASSETS = [
   './', './index.html', './manifest.webmanifest', './style.css', './template-data.js', './version.js', './places-extra.js',
   './app.js', './egypt.js', './chat.js', './xlsx-core.js', './render.js',
-  './jszip.min.js',
+  './jszip.min.js', './html2canvas.min.js', './jspdf.umd.min.js',
   './noto-sans-arabic-arabic-400-normal.woff2', './noto-sans-arabic-arabic-700-normal.woff2',
   './icon-192.png', './icon-512.png', './icon-maskable-512.png'
 ];

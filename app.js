@@ -44,8 +44,25 @@
   }
   function saveSettings() { try { localStorage.setItem('settings', JSON.stringify(settings)); } catch (e) { /* ignore */ } }
 
-  // تنظيف أي مسودة قديمة كانت متخزنة (ميزة "كمّل آخر مراجعة" اتشالت)
-  try { indexedDB.deleteDatabase('invoices-app'); } catch (e) { /* ignore */ }
+  /* ---------- IndexedDB (نحفظ القالب عشان مايترفعش كل يوم) ---------- */
+  function idb() {
+    return new Promise(function (res, rej) {
+      var rq = indexedDB.open('invoices-app', 1);
+      rq.onupgradeneeded = function () { rq.result.createObjectStore('kv'); };
+      rq.onsuccess = function () { res(rq.result); }; rq.onerror = function () { rej(rq.error); };
+    });
+  }
+  function idbGet(k) { return idb().then(function (db) { return new Promise(function (res, rej) { var r = db.transaction('kv').objectStore('kv').get(k); r.onsuccess = function () { res(r.result); }; r.onerror = rej; }); }); }
+  function idbSet(k, v) { return idb().then(function (db) { return new Promise(function (res, rej) { var t = db.transaction('kv', 'readwrite'); t.objectStore('kv').put(v, k); t.oncomplete = res; t.onerror = rej; }); }); }
+
+  var saveDraft = function () { clearTimeout(saveDraft._t); saveDraft._t = setTimeout(function () { if (state.orders.length) idbSet('draft', { orders: state.orders, total: state.totalMsgs || 0, ts: Date.now() }).catch(function () {}); }, 800); };
+  async function offerDraft() {
+    try {
+      var d = await idbGet('draft'); if (!d || !d.orders || !d.orders.length || state.orders.length) return;
+      var b = el('button', { class: 'secondary', text: 'كمّل آخر مراجعة (' + d.orders.length + ' أوردر)', onclick: function () { state.orders = d.orders; state.totalMsgs = d.total; renderReview(d.total); $('review').hidden = false; setStep(2); b.remove(); } });
+      $('chatCard').appendChild(b);
+    } catch (e) { /* ignore */ }
+  }
 
   /* ---------- القالب ---------- */
   async function inspectTemplate(bytes) {
@@ -64,9 +81,10 @@
     return out;
   }
 
-  async function setTemplate(bytes, name) {
+  async function setTemplate(bytes, name, persist) {
     var sheets = await inspectTemplate(bytes);
     state.tplBytes = bytes; state.tplName = name; state.tplSheets = sheets;
+    if (persist) await idbSet('template', { bytes: bytes, name: name });
     renderTemplateInfo();
   }
 
@@ -83,14 +101,14 @@
 
   function renderTemplateInfo() {
     var box = $('tplInfo'); box.innerHTML = '';
-    if (!state.tplBytes) { box.appendChild(el('p', { class: 'muted', text: 'لسه مفيش ملف. اختار ملف الإكسيل اللي فيه الشيتات (مرة واحدة وهيتحفظ في الموبايل).' })); $('btnAnalyze').disabled = true; $('brandBox').hidden = true; return; }
+    if (!state.tplBytes) { box.appendChild(el('p', { class: 'muted', text: 'لسه مفيش ملف. اختار ملف الإكسيل اللي فيه الشيتات (مرة واحدة وهيتحفظ في الموبايل).' })); $('btnTplPdf').disabled = true; $('btnAnalyze').disabled = true; $('brandBox').hidden = true; return; }
     box.appendChild(el('p', { class: 'ok', text: state.tplName }));
     var ul = el('ul', { class: 'sheets' });
     state.tplSheets.forEach(function (s) {
       ul.appendChild(el('li', {}, [el('b', { text: s.name }), ' — ' + (s.slots ? s.slots + ' فواتير في الشيت' : 'مش لاقي خانات الفاتورة (إسم العميل ...)')]));
     });
     box.appendChild(ul);
-    $('btnAnalyze').disabled = !state.chatText;
+    $('btnTplPdf').disabled = false; $('btnAnalyze').disabled = !state.chatText;
     var bl = $('brandList'); bl.innerHTML = ''; $('brandBox').hidden = false;
     var ds = $('optDefault'); ds.innerHTML = '';
     ds.appendChild(el('option', { value: '', text: '— اسأل (يتعتبر مشكلة) —' }));
@@ -139,15 +157,15 @@
   function toLocalInput(ms) { var d = new Date(ms); return d.getFullYear() + '-' + p2(d.getMonth() + 1) + '-' + p2(d.getDate()) + 'T' + p2(d.getHours()) + ':' + p2(d.getMinutes()); }
   function fmtDt(ms) { return new Date(ms).toLocaleString('ar-EG', { dateStyle: 'medium', timeStyle: 'short' }); }
   function fromMs() { var v = $('fromDt').value, t = v ? new Date(v).getTime() : NaN; return isNaN(t) ? -Infinity : t; }
-  // بداية الاحتساب الافتراضية: أول رسالة في السنة الحالية (مش أول رسالة في الشات لو قديمة)
-  function yearStart(st) {
-    var y0 = new Date(new Date().getFullYear(), 0, 1).getTime();
-    var inYear = st.list.filter(function (x) { return x.t >= y0; }).map(function (x) { return x.t; });
-    return inYear.length ? Math.min.apply(null, inYear) : st.first;
-  }
   function setupRange() {
     var st = state.st, ok = !!(st && st.list.length); $('rangeBox').hidden = !ok; if (!ok) return;
-    $('fromDt').value = toLocalInput(yearStart(st)); updateRange();
+    // الافتراضي: أول رسالة، بس لو الشات فيه رسايل قديمة (سنين فاتت) نبدأ من أول السنة الحالية
+    var y0 = new Date().getFullYear(), start = st.first;
+    if (new Date(st.first).getFullYear() < y0) {
+      var jan = new Date(y0, 0, 1).getTime();
+      if (st.list.some(function (x) { return x.t >= jan; })) start = jan;
+    }
+    $('fromDt').value = toLocalInput(start); updateRange();
   }
   function updateRange() {
     var st = state.st; if (!st || !st.list.length) return;
@@ -179,7 +197,6 @@
     fillList($('problems'), bad, $('probTitle'));
     fillList($('orders'), good, $('okTitle'));
     $('btnCopyProb').hidden = !bad.length;
-    $('btnNext').hidden = !bad.length;
     updateBuildBtn();
   }
   function fillList(box, arr, title) {
@@ -253,7 +270,7 @@
   function updateBuildBtn() {
     var inc = state.orders.filter(function (o) { return o.include && !o.issues.length; });
     var bad = state.orders.filter(function (o) { return o.issues.length; }).length;
-    $('btnBuild').disabled = !inc.length; $('fBad').textContent = 'للمراجعة (' + bad + ')'; $('fOk').textContent = 'جاهزة (' + state.orders.filter(function (o) { return !o.issues.length; }).length + ')'; $('btnNext').hidden = !bad; 
+    $('btnBuild').disabled = !inc.length; $('fBad').textContent = 'للمراجعة (' + bad + ')'; $('fOk').textContent = 'جاهزة (' + state.orders.filter(function (o) { return !o.issues.length; }).length + ')'; saveDraft();
     $('buildHint').textContent = inc.length ? inc.length + ' فاتورة' + (bad ? ' • ' + bad + ' مش هتتسجل' : '') : 'مفيش أوردرات جاهزة';
   }
 
@@ -282,12 +299,21 @@
     finally { setBusy(false); }
   }
 
+  async function convertTemplateOnly() {
+    try {
+      setBusy(true, 'بحوّل الملف...');
+      state.xlsxBytes = state.tplBytes;
+      await showResult('تم تحويل كل شيتات الملف زي ما هي.');
+    } catch (e) { console.error(e); toast('حصلت مشكلة: ' + e.message, 6000); }
+    finally { setBusy(false); }
+  }
+
   async function showResult(summary) {
     if (state.model) R.revokeModel(state.model);
     state.model = await R.readModel(state.xlsxBytes);
     var off = $('offscreen'); off.innerHTML = '';
     state.pages = await R.renderPages(state.model, off);
-    $('resultSummary').textContent = summary + ' — ' + state.pages.length + ' صفحة A4 — اضغط «حفظ Excel».';
+    $('resultSummary').textContent = summary + ' — ' + state.pages.length + ' صفحة A4.';
     $('result').hidden = false; setStep(3);
     drawPreview();
     setTimeout(function () { $('result').scrollIntoView({ behavior: 'smooth', block: 'start' }); }, 50);
@@ -311,6 +337,42 @@
     download(new Blob([state.xlsxBytes], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }), 'invoices-' + today() + '.xlsx');
   }
 
+  async function makePdf() {
+    var jsPDF = window.jspdf.jsPDF, pdf = null, q = 2;
+    for (var i = 0; i < state.pages.length; i++) {
+      var p = state.pages[i];
+      $('busyMsg').textContent = 'بجهز الـ PDF... (' + (i + 1) + ' / ' + state.pages.length + ')'; progress(i / state.pages.length);
+      var canvas = await html2canvas(p.el, { scale: q, backgroundColor: '#ffffff', useCORS: true, logging: false });
+      var w = p.landscape ? 297 : 210, h = p.landscape ? 210 : 297, o = p.landscape ? 'l' : 'p';
+      if (!pdf) pdf = new jsPDF({ orientation: o, unit: 'mm', format: 'a4', compress: true }); else pdf.addPage('a4', o);
+      pdf.addImage(canvas.toDataURL('image/jpeg', 0.92), 'JPEG', 0, 0, w, h, undefined, 'FAST');
+      canvas.width = canvas.height = 0;
+      await new Promise(function (r) { setTimeout(r, 0); });
+    }
+    progress(1);
+    return pdf.output('blob');
+  }
+  async function downloadPdf() {
+    try { setBusy(true, 'بجهز الـ PDF...'); download(await makePdf(), 'invoices-' + today() + '.pdf'); }
+    catch (e) { console.error(e); toast('مشكلة في الـ PDF: ' + e.message, 6000); }
+    finally { setBusy(false); }
+  }
+  async function sharePdf() {
+    try {
+      setBusy(true, 'بجهز الـ PDF...');
+      var f = new File([await makePdf()], 'invoices-' + today() + '.pdf', { type: 'application/pdf' });
+      setBusy(false);
+      await navigator.share({ files: [f], title: 'فواتير ' + today() });
+    } catch (e) { if (e && e.name !== 'AbortError') { console.error(e); toast('المشاركة مش متاحة، استخدم التنزيل', 5000); } }
+    finally { setBusy(false); }
+  }
+
+  function printPages() {
+    // الطباعة بتستخدم نفس الصفحات اللي في #offscreen (ال CSS بيظهرها وقت الطباعة بس)
+    if (!state.pages.length) return;
+    setTimeout(function () { window.print(); }, 100);
+  }
+
   /* ---------- ربط الأحداث ---------- */
   function bind() {
     $('chatFile').addEventListener('change', function (e) { var f = e.target.files[0]; if (f) onChat(f); e.target.value = ''; });
@@ -318,22 +380,17 @@
     $('fromDt').addEventListener('input', updateRange);
     document.querySelectorAll('#rangeBox .chip[data-q]').forEach(function (c) { c.addEventListener('click', function () {
       var st = state.st; if (!st || !st.list.length) return; var d = new Date(); d.setHours(0, 0, 0, 0);
-      var q = c.dataset.q; $('fromDt').value = toLocalInput(q === 'all' ? yearStart(st) : (q === 'yest' ? d.getTime() - 864e5 : d.getTime())); updateRange(); }); });
+      var q = c.dataset.q; $('fromDt').value = toLocalInput(q === 'all' ? st.first : (q === 'yest' ? d.getTime() - 864e5 : d.getTime())); updateRange(); }); });
     $('btnTheme').addEventListener('click', function () {
       var n = document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark';
       document.documentElement.dataset.theme = n; document.querySelector('meta[name=theme-color]').content = n === 'dark' ? '#201b1d' : '#9b5560';
       try { localStorage.setItem('theme', n); } catch (e) { /* ignore */ } });
     $('btnBuild').addEventListener('click', build);
     $('btnCopyProb').addEventListener('click', copyProblems);
+    $('btnTplPdf').addEventListener('click', convertTemplateOnly);
     $('btnXlsx').addEventListener('click', downloadXlsx);
     document.querySelectorAll('#filters .chip[data-f]').forEach(function (c) { c.addEventListener('click', function () {
       $('review').dataset.f = c.dataset.f; document.querySelectorAll('#filters .chip[data-f]').forEach(function (x) { x.classList.toggle('on', x === c); }); }); });
-    $('btnNext').addEventListener('click', function () {
-      $('review').dataset.f = $('review').dataset.f === 'ok' ? 'all' : $('review').dataset.f;
-      var list = Array.prototype.slice.call(document.querySelectorAll('#problems .order.bad')); if (!list.length) return;
-      var next = list.filter(function (c) { return c.getBoundingClientRect().top > 140; })[0] || list[0];
-      next._open && next._open(); next.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    });
     $('chatCard').querySelector('h2').addEventListener('click', function () { $('chatCard').classList.toggle('fold'); });
     $('optStrip').checked = settings.stripReg; $('optDrop').checked = settings.dropEmpty;
     $('optStrip').addEventListener('change', function () { settings.stripReg = $('optStrip').checked; saveSettings(); if (state.chatText && !$('review').hidden && confirm('أعيد تحليل الشات بالإعداد الجديد؟ (التعديلات اليدوية هتضيع)')) analyze(); });
@@ -375,8 +432,9 @@
       var bt = window.BUILTIN_TEMPLATE;
       var bin = atob(bt.b64), u8 = new Uint8Array(bin.length);
       for (var bi = 0; bi < bin.length; bi++) u8[bi] = bin.charCodeAt(bi);
-      await setTemplate(u8.buffer, bt.name);
+      await setTemplate(u8.buffer, bt.name, false);
     } catch (e) { console.warn(e); renderTemplateInfo(); }
+    offerDraft();
     // ملف جاي من "مشاركة" واتساب (Share Target)
     if (/[?&]shared=1/.test(location.search) && 'caches' in window) {
       try {
@@ -386,5 +444,5 @@
     }
   }
   document.addEventListener('DOMContentLoaded', init);
-  window.__app = { state: state, build: build, analyze: analyze, setTemplate: setTemplate, onChat: onChat };
+  window.__app = { state: state, build: build, analyze: analyze, setTemplate: setTemplate, onChat: onChat, downloadPdf: downloadPdf };
 })();

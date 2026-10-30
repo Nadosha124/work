@@ -79,7 +79,7 @@ footer.ver{margin:18px 0 100px;text-align:center;font-size:12px;opacity:.65}
 @media(min-width:720px){main{padding-top:16px}.card{padding:18px}.grid{grid-template-columns:repeat(3,1fr)}.bar{left:50%;right:auto;width:760px;transform:translateX(-50%);border-radius:14px 14px 0 0}}
 @media(prefers-reduced-motion:reduce){*{transition:none!important;animation-duration:.01ms!important}}
 
-/* صفحات الـ A4 (للمعاينة) */
+/* صفحات الـ A4 (للمعاينة والـ PDF والطباعة) */
 #offscreen{position:fixed;left:-20000px;top:0;direction:ltr;pointer-events:none}
 .xpage{position:relative;background:#fff;overflow:hidden;direction:ltr;-webkit-print-color-adjust:exact;print-color-adjust:exact}
 .xwrap{position:absolute;left:0;top:0;transform-origin:0 0}
@@ -87,3 +87,13 @@ footer.ver{margin:18px 0 100px;text-align:center;font-size:12px;opacity:.65}
 .xs td{padding:0 2px;overflow:hidden;line-height:1.25;word-break:break-word;box-sizing:border-box}
 .xs td .x{display:block}
 .xi{position:absolute;display:block}
+@page{size:A4;margin:0}
+@media print{
+  html,body{background:#fff}
+  body>*:not(#offscreen){display:none!important}
+  #offscreen{position:static;left:auto}
+  .xpage{break-after:page;page-break-after:always;margin:0}
+  .xpage.land{page:land}
+}
+@page land{size:A4 landscape;margin:0}
+
