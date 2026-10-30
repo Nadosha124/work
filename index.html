@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<meta name="theme-color" content="#9b5560">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="فواتير">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<script>try{var t=localStorage.getItem('theme')||(matchMedia('(prefers-color-scheme:dark)').matches?'dark':'light');document.documentElement.dataset.theme=t;if(t==='dark')document.querySelector('meta[name=theme-color]').content='#201b1d'}catch(e){}</script>
+<link rel="stylesheet" href="style.css">
+<title>فواتير الأوردرات</title>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+<symbol id="i-up" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12"/></symbol>
+<symbol id="i-down" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/></symbol>
+<symbol id="i-share" viewBox="0 0 24 24"><path d="M4 12v7a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-7M16 6l-4-4-4 4M12 2v13"/></symbol>
+<symbol id="i-print" viewBox="0 0 24 24"><path d="M6 9V2h12v7M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2M6 14h12v8H6z"/></symbol>
+<symbol id="i-set" viewBox="0 0 24 24"><path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6"/></symbol>
+<symbol id="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M6.3 17.7l-1.4 1.4M19.1 4.9l-1.4 1.4"/></symbol>
+<symbol id="i-moon" viewBox="0 0 24 24"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></symbol>
+</defs></svg>
+
+<header class="top">
+  <h1>فواتير الأوردرات</h1>
+  <span id="net" class="pill">...</span>
+  <button id="btnInstall" class="mini" hidden>تثبيت</button>
+  <button id="btnTheme" class="ibtn" aria-label="تبديل الثيم (فاتح / داكن)"><svg class="i ic-moon"><use href="#i-moon"/></svg><svg class="i ic-sun"><use href="#i-sun"/></svg></button>
+</header>
+
+<ol class="steps" id="steps"><li data-s="1" class="on"><b>١</b> الشات</li><li data-s="2"><b>٢</b> المراجعة</li><li data-s="3"><b>٣</b> الناتج</li></ol>
+
+<main>
+  <section class="card" id="chatCard">
+    <h2>الشات</h2>
+    <div class="foldable">
+      <label class="file"><input type="file" id="chatFile" accept=".zip,.txt,application/zip,text/plain"><span><svg class="i"><use href="#i-up"/></svg>اختار ملف الشات</span></label>
+      <div id="rangeBox" class="range" hidden>
+        <label class="f"><span>ابدأ احتساب الرسايل من</span><input type="datetime-local" id="fromDt"></label>
+        <div class="quick"><button class="chip" data-q="all">من أول السنة</button><button class="chip" data-q="today">النهارده</button><button class="chip" data-q="yest">إمبارح</button></div>
+        <p id="rangeInfo" class="muted"></p>
+      </div>
+    </div>
+    <div id="chatInfo"></div>
+    <button id="btnAnalyze" class="primary full" disabled>حلّل الأوردرات</button>
+  </section>
+
+  <section id="review" class="card" hidden>
+    <h2>المراجعة</h2>
+    <p id="reviewSummary" class="muted"></p>
+    <div class="filters" id="filters"><button data-f="all" class="chip on">الكل</button><button data-f="bad" class="chip" id="fBad">للمراجعة</button><button data-f="ok" class="chip" id="fOk">جاهزة</button><button id="btnNext" class="chip next">التالية</button></div>
+    <h3 id="probTitle" class="prob">محتاجة مراجعة</h3>
+    <button id="btnCopyProb" class="link">نسخ القائمة</button>
+    <div id="problems"></div>
+    <h3 id="okTitle" class="okh">جاهزة</h3>
+    <div id="orders"></div>
+    <div class="bar">
+      <span id="buildHint" class="muted"></span>
+      <button id="btnBuild" class="primary" disabled>اعمل الشيتات</button>
+    </div>
+  </section>
+
+  <section id="result" class="card" hidden>
+    <h2>الناتج</h2>
+    <p id="resultSummary" class="muted"></p>
+    <div class="actions">
+      <button id="btnXlsx" class="primary"><svg class="i"><use href="#i-down"/></svg>حفظ Excel</button>
+    </div>
+    <div id="preview"></div>
+  </section>
+
+  <details class="card settings" id="settings">
+    <summary><svg class="i"><use href="#i-set"/></svg>الإعدادات</summary>
+    <div id="tplInfo"></div>
+    <details id="brandBox" hidden>
+      <summary>أسماء الشيتات في الشات</summary>
+      <p class="muted">الكلمة اللي بعد 📌 لكل شيت (ممكن أكتر من كلمة بفاصلة).</p>
+      <div id="brandList"></div>
+      <label class="row"><span>لو مفيش اسم شيت في الرسالة:</span><select id="optDefault"></select></label>
+      <label class="chk"><input type="checkbox" id="optStrip"> احذف عبارة «تم تسجيل الأوردر»</label>
+      <label class="chk"><input type="checkbox" id="optDrop"> تجاهل الشيت اللي مالوش أوردرات</label>
+    </details>
+  </details>
+</main>
+
+<div id="offscreen" aria-hidden="true"></div>
+<div id="busy"><div class="spin"></div><div id="busyMsg">ثانية واحدة...</div><div class="prog" id="prog"><i id="busyBar"></i></div></div>
+<div id="toast"></div>
+
+<script src="jszip.min.js"></script>
+<script src="places-extra.js"></script>
+<script src="egypt.js"></script>
+<script src="chat.js"></script>
+<script src="xlsx-core.js"></script>
+<script src="render.js"></script>
+<script src="version.js"></script>
+<script src="template-data.js"></script>
+<script src="app.js"></script>
+<footer class="ver"><span id="verTxt"></span> · <button id="btnForceUpdate" class="link">تحديث ومسح الكاش</button></footer>
+</body>
+</html>
