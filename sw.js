@@ -1,5 +1,5 @@
 /* Service Worker — كاش كامل عشان يشتغل أوفلاين + استقبال ملف الشات من "مشاركة" */
-const VERSION = 'v16';
+const VERSION = 'v17';
 const CACHE = 'invoices-' + VERSION;
 const ASSETS = [
   './', './index.html', './manifest.webmanifest', './style.css', './template-data.js', './version.js', './places-extra.js',
