@@ -4,14 +4,14 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="color-scheme" content="light dark">
-<meta name="theme-color" content="#9b5560">
+<meta name="theme-color" content="#17334f">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="فواتير">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icon-192.png">
 <link rel="apple-touch-icon" href="icon-192.png">
-<script>try{var t=localStorage.getItem('theme')||(matchMedia('(prefers-color-scheme:dark)').matches?'dark':'light');document.documentElement.dataset.theme=t;if(t==='dark')document.querySelector('meta[name=theme-color]').content='#201b1d'}catch(e){}</script>
+<script>try{var t=localStorage.getItem('theme')||(matchMedia('(prefers-color-scheme:dark)').matches?'dark':'light');document.documentElement.dataset.theme=t;if(t==='dark')document.querySelector('meta[name=theme-color]').content='#17334f'}catch(e){}</script>
 <link rel="stylesheet" href="style.css">
 <title>فواتير الأوردرات</title>
 </head>
@@ -63,6 +63,19 @@
       <span id="buildHint" class="muted"></span>
       <button id="btnBuild" class="primary" disabled>اعمل الشيتات</button>
     </div>
+  </section>
+
+  <section id="addMore" class="card" hidden>
+    <h2>زوّد أوردرات من ملف تاني</h2>
+    <p class="muted">الأوردرات الجديدة بتتضاف تحت اللي في المراجعة، والمكرر (نفس الرقم والتفاصيل والسعر) بيتجاهل لوحده.</p>
+    <label class="file"><input type="file" id="addFile" accept=".zip,.txt,application/zip,text/plain"><span><svg class="i"><use href="#i-up"/></svg>اختار ملف شات تاني</span></label>
+    <div id="addRange" class="range" hidden>
+      <label class="f"><span>ابدأ احتساب الرسايل من</span><input type="datetime-local" id="addFromDt"></label>
+      <div class="quick"><button class="chip" data-q="all">من الأول</button><button class="chip" data-q="today">النهارده</button><button class="chip" data-q="yest">إمبارح</button></div>
+      <p id="addRangeInfo" class="muted"></p>
+    </div>
+    <div id="addInfo"></div>
+    <button id="btnAppend" class="primary full" disabled>ضيف الأوردرات للمراجعة</button>
   </section>
 
   <section id="result" class="card" hidden>

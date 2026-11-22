@@ -59,7 +59,7 @@
   async function offerDraft() {
     try {
       var d = await idbGet('draft'); if (!d || !d.orders || !d.orders.length || state.orders.length) return;
-      var b = el('button', { class: 'secondary', text: 'كمّل آخر مراجعة (' + d.orders.length + ' أوردر)', onclick: function () { state.orders = d.orders; state.totalMsgs = d.total; renderReview(d.total); $('review').hidden = false; setStep(2); b.remove(); } });
+      var b = el('button', { class: 'secondary', text: 'كمّل آخر مراجعة (' + d.orders.length + ' أوردر)', onclick: function () { state.orders = d.orders; state.totalMsgs = d.total; renderReview(d.total); $('review').hidden = false; $('addMore').hidden = false; setStep(2); b.remove(); } });
       $('chatCard').appendChild(b);
     } catch (e) { /* ignore */ }
   }
@@ -182,8 +182,51 @@
     state.orders = res.orders; state.totalMsgs = res.totalMessages;
     $('chatCard').classList.add('fold'); $('review').dataset.f = 'all'; setStep(2); document.body.classList.remove('res');
     renderReview(res.totalMessages);
-    $('review').hidden = false; $('result').hidden = true;
+    $('review').hidden = false; $('addMore').hidden = false; $('result').hidden = true; resetAdd();
     setTimeout(function () { $('review').scrollIntoView({ behavior: 'smooth', block: 'start' }); }, 50);
+  }
+
+  /* ---------- زوّد أوردرات من ملف شات تاني (Append) ---------- */
+  function addFromMs() { var v = $('addFromDt').value, t = v ? new Date(v).getTime() : NaN; return isNaN(t) ? -Infinity : t; }
+  function resetAdd() { state.add = null; $('addInfo').textContent = ''; $('addInfo').className = ''; $('addRange').hidden = true; $('btnAppend').disabled = true; }
+  async function onAddFile(file) {
+    try {
+      setBusy(true, 'بقرا الشات...');
+      var text = await readChatFile(file), st = C.chatStamps(text);
+      state.add = { text: text, st: st, name: file.name || 'الشات' };
+      $('addInfo').textContent = state.add.name + ' — ' + C.splitMessages(text).length + ' رسالة'; $('addInfo').className = 'ok';
+      setupAddRange();
+    } catch (e) { resetAdd(); toast('مشكلة في ملف الشات: ' + e.message, 5000); }
+    finally { setBusy(false); }
+  }
+  function setupAddRange() {
+    var st = state.add && state.add.st, ok = !!(st && st.list.length);
+    $('addRange').hidden = !ok; $('btnAppend').disabled = !state.add || !state.tplBytes; if (!ok) return;
+    var y0 = new Date().getFullYear(), start = st.first;
+    if (new Date(st.first).getFullYear() < y0) { var jan = new Date(y0, 0, 1).getTime(); if (st.list.some(function (x) { return x.t >= jan; })) start = jan; }
+    $('addFromDt').value = toLocalInput(start); updateAddRange();
+  }
+  function updateAddRange() {
+    var st = state.add && state.add.st; if (!st || !st.list.length) return;
+    var ms = addFromMs(), c = st.list.filter(function (x) { return x.t >= ms; }).length;
+    $('addRangeInfo').textContent = c + ' رسالة من ' + st.list.length + ' • الشات من ' + fmtDt(st.first) + ' إلى ' + fmtDt(st.last);
+    $('btnAppend').disabled = !state.tplBytes || !c;
+  }
+  function appendOrders() {
+    var a = state.add; if (!a || !state.tplBytes) return;
+    var txt = a.text;
+    if (a.st && a.st.list.length) { var cut = C.cutFrom(a.st, addFromMs()); if (!cut.count) { toast('مفيش رسايل من الوقت ده'); return; } txt = cut.text; }
+    var res = C.parseChat(txt, brands(), { stripRegPhrase: settings.stripReg, defaultBrand: settings.defaultSheet || null });
+    // الأوردر اللي موجود قبل كده (نفس الرقم والتفاصيل والسعر، أو نفس الرسالة الأصلية) بنتجاهله
+    var seenKey = {}, seenRaw = {};
+    state.orders.forEach(function (o) { if (o.phone && o.details) seenKey[[o.phone, o.details, o.price].join('|')] = true; if (o.raw) seenRaw[o.raw] = true; });
+    var fresh = res.orders.filter(function (o) { return !((o.phone && o.details && seenKey[[o.phone, o.details, o.price].join('|')]) || (o.raw && seenRaw[o.raw])); });
+    var skipped = res.orders.length - fresh.length;
+    state.orders = state.orders.concat(fresh); state.totalMsgs = (state.totalMsgs || 0) + res.totalMessages;
+    renderReview(state.totalMsgs);
+    if (!$('result').hidden) { $('result').hidden = true; setStep(2); document.body.classList.remove('res'); }
+    resetAdd();
+    toast(fresh.length ? 'اتضاف ' + fresh.length + ' أوردر' + (skipped ? ' • ' + skipped + ' مكرر اتجاهل' : '') : (skipped ? 'كل الأوردرات دي موجودة قبل كده (' + skipped + ')' : 'مفيش أوردرات جديدة في الفترة دي'), 4500);
   }
 
   /* ---------- مراجعة الأوردرات ---------- */
@@ -377,13 +420,19 @@
   function bind() {
     $('chatFile').addEventListener('change', function (e) { var f = e.target.files[0]; if (f) onChat(f); e.target.value = ''; });
     $('btnAnalyze').addEventListener('click', analyze);
+    $('addFile').addEventListener('change', function (e) { var f = e.target.files[0]; if (f) onAddFile(f); e.target.value = ''; });
+    $('addFromDt').addEventListener('input', updateAddRange);
+    $('btnAppend').addEventListener('click', appendOrders);
+    document.querySelectorAll('#addRange .chip[data-q]').forEach(function (c) { c.addEventListener('click', function () {
+      var st = state.add && state.add.st; if (!st || !st.list.length) return; var d = new Date(); d.setHours(0, 0, 0, 0);
+      var q = c.dataset.q; $('addFromDt').value = toLocalInput(q === 'all' ? st.first : (q === 'yest' ? d.getTime() - 864e5 : d.getTime())); updateAddRange(); }); });
     $('fromDt').addEventListener('input', updateRange);
     document.querySelectorAll('#rangeBox .chip[data-q]').forEach(function (c) { c.addEventListener('click', function () {
       var st = state.st; if (!st || !st.list.length) return; var d = new Date(); d.setHours(0, 0, 0, 0);
       var q = c.dataset.q; $('fromDt').value = toLocalInput(q === 'all' ? st.first : (q === 'yest' ? d.getTime() - 864e5 : d.getTime())); updateRange(); }); });
     $('btnTheme').addEventListener('click', function () {
       var n = document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark';
-      document.documentElement.dataset.theme = n; document.querySelector('meta[name=theme-color]').content = n === 'dark' ? '#201b1d' : '#9b5560';
+      document.documentElement.dataset.theme = n; document.querySelector('meta[name=theme-color]').content = '#17334f';
       try { localStorage.setItem('theme', n); } catch (e) { /* ignore */ } });
     $('btnBuild').addEventListener('click', build);
     $('btnCopyProb').addEventListener('click', copyProblems);
